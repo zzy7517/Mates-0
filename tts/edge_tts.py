@@ -2,11 +2,15 @@ import asyncio
 import logging
 import os
 
-import playsound
+import pyaudio
 
 import edge_tts
+from tts.player import pyaudio_play_file
+
 
 class EdgeTTS:
+    def __init__(self):
+        self.pyaudio_player = pyaudio.PyAudio()
     def speek(self, text):
         try:
             # zh-CN-YunxiNeural
@@ -24,7 +28,7 @@ class EdgeTTS:
 
             if os.path.exists(full_path):
                 logging.info("start speak")
-                playsound.playsound(full_path)
+                pyaudio_play_file(self.pyaudio_player, full_path)
                 os.remove(full_path)
 
         except Exception as e:

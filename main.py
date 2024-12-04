@@ -46,4 +46,3 @@ if __name__ == '__main__':
     ASR = ASR(asr_model(AsrModelEnum(args.asr), args.language), asr_call_back)
     asyncio.run(main())
     logging.info("server started")
-
