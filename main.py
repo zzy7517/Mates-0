@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--asr', default=1, type=int, choices=[e.value for e in AsrModelEnum],
                         help='asr type to use')
     parser.add_argument('--llm', default="sambanova", help='Language model to use')
-    parser.add_argument('--tts', default="edge_tts", help='TTS model to use')
+    parser.add_argument('--tts', default="vits_onnx", help='TTS model to use') # edge_tts
     args = parser.parse_args()
     LLM = get_llm(args.llm)
     TTS = get_tts(args.tts)
