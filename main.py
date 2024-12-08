@@ -14,8 +14,8 @@ logging.basicConfig(
 )
 
 def asr_call_back(message: str):
-    res = LLM.chat(message)
-    TTS.speek(res)
+    for i, sentence in enumerate(LLM.chat(message)):
+        TTS.send_speeking_task(sentence)
 
 async def websocket_handler(websocket):
     try:

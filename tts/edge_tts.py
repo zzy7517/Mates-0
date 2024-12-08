@@ -33,3 +33,6 @@ class EdgeTTS:
 
         except Exception as e:
             print(f"An unexpected error occurred, error: {e}")
+
+    def send_speaking_task(self):
+        raise NotImplementedError("This method is not implemented by edge tts")

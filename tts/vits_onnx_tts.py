@@ -47,20 +47,22 @@ phone_fst = os.path.join(base_dir, "phone.fst")
 date_fst = os.path.join(base_dir, "date.fst")
 number_fst = os.path.join(base_dir, "number.fst")
 tts_rule_fsts = ",".join([phone_fst, date_fst, number_fst])
-output_filename = "./test.wav"
+# output_filename = "./test.wav"
 sid = 2
 provider = "cpu" # cpu, cuda, coreml
 num_threads = 1
 speed = 1.0
-texta = "当夜幕降临，星光点点，伴随着微风拂面，我在静谧中感受着时光的流转，思念如涟漪荡漾，梦境如画卷展开，我与自然融为一体，沉静在这片宁静的美丽之中，感受着生命的奇迹与温柔。2024年5月11号，拨打110或者18920240511。123456块钱。"
 
 class VitsOnnx:
     def __init__(self):
         self.buffer = queue.Queue() # buffer saves audio samples to be played
-        self.started = False # started is set to True once generated_audio_callback is called.
-        self.stopped = False # stopped is set to True once all the text has been processed
+
+        self.stopped = False
         self.event = threading.Event()
-        self.first_message_time = None
+        self.tasks = queue.Queue()
+        self.worker_thread = threading.Thread(target=self.worker)
+        self.worker_thread.start()
+
         tts_config = sherpa_onnx.OfflineTtsConfig(
             model=sherpa_onnx.OfflineTtsModelConfig(
                 vits=sherpa_onnx.OfflineTtsVitsModelConfig(
@@ -94,12 +96,8 @@ class VitsOnnx:
           samples:
             A 1-D np.float32 array containing audio samples
         """
-        if self.first_message_time is None:
-            self.first_message_time = time.time()
+
         self.buffer.put(samples)
-        if self.started is False:
-            logging.info("Start playing ...")
-        self.started = True
 
         # 1 means to keep generating
         # 0 means to stop generating
@@ -114,9 +112,8 @@ class VitsOnnx:
     def play_audio_callback(
         self, outdata: np.ndarray, frames: int, time, status: sd.CallbackFlags
     ):
-        if self.started and self.buffer.empty() and self.stopped:
+        if self.buffer.empty() and self.stopped:
             self.event.set()
-
         # outdata is of shape (frames, num_channels)
         if self.buffer.empty():
             outdata.fill(0)
@@ -133,15 +130,12 @@ class VitsOnnx:
                 n = frames
                 if self.buffer.queue[0].shape[0] == 0:
                     self.buffer.get()
-
                 break
-
             outdata[n : n + k, 0] = self.buffer.get()
             n += k
 
         if n < frames:
             outdata[n:, 0] = 0
-
 
     # Please see
     # https://python-sounddevice.readthedocs.io/en/0.4.6/usage.html#device-selection
@@ -149,16 +143,17 @@ class VitsOnnx:
     def play_audio(self):
         # This if branch can be safely removed. It is here to show you how to
         # change the default output device in case you need that.
-        devices = sd.query_devices()
-        #print(devices)
+        # devices = sd.query_devices()
+        # print(devices)
 
         # sd.default.device[1] is the output device, if you want to
         # select a different device, say, 3, as the output device, please
         # use self.default.device[1] = 3
-        default_output_device_idx = sd.default.device[1]
-        print(
-            f'Use default output device: {devices[default_output_device_idx]["name"]}'
-        )
+        # default_output_device_idx = sd.default.device[1]
+        # print(
+        #     f'Use default output device: {devices[default_output_device_idx]["name"]}'
+        # )
+
 
         with sd.OutputStream(
             channels=1,
@@ -168,13 +163,19 @@ class VitsOnnx:
             blocksize=1024,
         ):
             self.event.wait()
+        logging.info("play audio finished")
 
+    def worker(self):
+        while True:
+            text = self.tasks.get()
+            if text is None:
+                break
+            self.speek(text)
 
     def speek(self, text):
         self.buffer = queue.Queue()
-        self.started = False
+        self.event.clear()
         self.stopped = False
-        self.first_message_time = None
 
         play_back_thread = threading.Thread(target=self.play_audio)
         play_back_thread.start()
@@ -197,16 +198,14 @@ class VitsOnnx:
         audio_duration = len(audio.samples) / audio.sample_rate
         real_time_factor = elapsed_seconds / audio_duration
 
-        sf.write(
-            output_filename,
-            audio.samples,
-            samplerate=audio.sample_rate,
-            subtype="PCM_16",
-        )
         logging.info(f"The text is '{text}'")
-        logging.info("Time in seconds to receive the first "f"message: {self.first_message_time-start_time:.3f}")
-        #logging.info(f"Elapsed seconds: {elapsed_seconds:.3f}")
-        #logging.info(f"Audio duration in seconds: {audio_duration:.3f}")
         logging.info(f"RTF: {elapsed_seconds:.3f}/{audio_duration:.3f} = {real_time_factor:.3f}")
-        logging.info(f"***  Saved to {output_filename} ***")
+
         play_back_thread.join()
+
+    def send_speeking_task(self, text):
+        self.tasks.put(text)
+
+    def stop(self):
+        self.tasks.put(None)
+        self.worker_thread.join()

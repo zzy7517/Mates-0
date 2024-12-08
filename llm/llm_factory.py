@@ -3,6 +3,7 @@ from .Sambanova import SambaNova
 base_url = "https://api.sambanova.ai/v1"
 api_key = "b1463722-e182-437a-b294-8a4c867923fe"
 LLAMA_405B = "Meta-Llama-3.1-405B-Instruct"
+LLAMA_70B = "Meta-Llama-3.1-70B-Instruct"
 
 
 def get_llm(llm:str):
